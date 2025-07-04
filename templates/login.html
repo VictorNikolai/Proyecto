@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Iniciar Sesión - {{ user_type|capitalize }}{% endblock %}
+
+{% block content %}
+<div class="auth-options-bg">
+  <div class="auth-box">
+    <h2 class="auth-title">Iniciar Sesión - {{ user_type|capitalize }}</h2>
+
+    {% if error %}
+      <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" class="auth-form">
+      <div class="form-group">
+        <label for="username">Usuario</label>
+        <input id="username" name="username" class="form-control" placeholder="Ingrese su usuario" required>
+      </div>
+      <div class="form-group">
+        <label for="dni">DNI</label>
+        <input id="dni" name="dni" class="form-control" placeholder="Ingrese su DNI" required>
+      </div>
+      <div class="form-group">
+        <label for="password">Contraseña</label>
+        <input id="password" name="password" type="password" class="form-control" placeholder="Ingrese su contraseña" required>
+      </div>
+      <button class="btn btn-ingresar-operadora" type="submit">Ingresar</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;flex-direction:column;align-items:center;">
+  <h2>Fase 2: Recursos Cercanos al Incidente</h2>
+  <div id="map" style="width:900px;height:500px;border-radius:16px;margin-bottom:20px;"></div>
+  <input type="hidden" id="incidenteLat">
+  <input type="hidden" id="incidenteLng">
+  <label>
+    Radio:
+    <input type="range" id="radiusInput" min="500" max="20000" value="10000" style="vertical-align:middle;">
+    <span id="radiusValue">10000</span> m
+  </label>
+</div>
+<script>
+  // Recupera del localStorage los valores guardados en la Fase 1
+  document.getElementById('incidenteLat').value = localStorage.getItem("incidente_lat") || -12.0464;
+  document.getElementById('incidenteLng').value = localStorage.getItem("incidente_lng") || -77.0428;
+  document.getElementById('radiusInput').value = localStorage.getItem("radio") || 10000;
+  document.getElementById('radiusValue').textContent = document.getElementById('radiusInput').value;
+</script>
+<script src="{{ url_for('static', filename='js/map_logic_fase2.js') }}"></script>
+{% endblock %}

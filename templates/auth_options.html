@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="auth-options-bg">
+  <div class="auth-box">
+    <h1 class="auth-title">¡Bienvenida, Operadora!</h1>
+    <p class="auth-subtitle">Elige cómo deseas acceder al sistema.</p>
+    <div class="auth-buttons">
+      <a href="{{ url_for('login', user_type='operadora') }}" class="btn-auth btn-primary">Iniciar Sesión</a>
+      <a href="{{ url_for('register', user_type='operadora') }}" class="btn-auth btn-secondary">Registrarse</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

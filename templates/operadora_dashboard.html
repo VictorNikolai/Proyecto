@@ -1,0 +1,571 @@
+{% extends "base.html" %}
+{% block title %}Dashboard Operadora{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<style>
+  body, #dashboard-container { background: #fafafd !important; }
+  #dashboard-container {
+    display: flex; flex-direction: row; justify-content: flex-start; align-items: flex-start;
+    gap: 3vw; width: 98vw; max-width: 100vw; min-height: 80vh; margin-top: 40px; padding-left: 1vw;
+  }
+  #map-area {
+    background: #e9e9ef; border-radius: 26px; box-shadow: 0 4px 32px #e5393520;
+    width: 43vw; min-width: 420px; max-width: 950px; aspect-ratio: 1/1;
+    min-height: 480px; height: 42vw; max-height: 900px; display: flex;
+    flex-direction: column; align-items: center; justify-content: flex-start; position: sticky; top: 40px; left: 0; z-index: 1;
+  }
+  #map { width: 100%; height: 100%; border-radius: 20px; min-height: 400px; }
+  .toggle-btns {
+    margin: 17px 0 6px 0; display: flex; gap: 9px; justify-content: center; width: 100%;
+  }
+  .toggle-btn {
+    background: #f6f6f6; color: #e53935; border: 2px solid #e53935; border-radius: 7px;
+    font-weight: 600; font-size: 1.03em; padding: 6px 14px; cursor: pointer;
+    transition: background 0.14s, color 0.14s, border 0.16s;
+  }
+  .toggle-btn.active, .toggle-btn:hover {
+    background: #e53935; color: #fff; border: 2px solid #e53935;
+  }
+  #results-panel {
+    flex: 1; width: 100%; margin-left: 0vw; display: flex; flex-direction: column;
+    gap: 0; align-items: flex-start; min-height: 600px; padding-right: 0.5vw;
+    overflow-x: hidden; overflow-y: auto; max-height: 96vh; box-sizing: border-box;
+  }
+  #fase-titulo { font-size: 1.32em; font-weight: bold; color: #b71c1c; margin-bottom: 0.4em; margin-top: 2px; letter-spacing: .01em;}
+  #controls-area { padding: 0 0 14px 0; display: flex; align-items: center; gap: 25px; font-size: 1.13em; width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+  .search-label { font-weight: bold; color: #e53935; font-size: 1.15em; margin-right: 8px; letter-spacing: 0.01em;}
+  .radius-slider { accent-color: #e53935; margin: 0 10px 0 8px; height: 4px; width: 170px; border-radius: 8px; background: linear-gradient(90deg, #e53935 60%, #f9caca 100%); box-shadow: 0 2px 7px #e5393522; outline: none;}
+  #radiusValue { display: inline-block; min-width: 60px; font-weight: bold; color: #e53935; font-size: 1.11em; padding: 1px 7px 1px 2px;}
+  .incendio-label { margin-left: 14px; color: #b71c1c; font-weight: bold; font-size:1.07em;}
+  .incendio-select { border-radius: 8px; border:1.5px solid #e53935; padding:4px 12px;font-size:1em; margin-left:7px;}
+  #riesgos-alertas {width:100%;margin:12px 0 6px 0;}
+  .alert-riesgo, .alert-hidrante { background: #fff7e0; color: #a76b00; border-left: 5px solid #ffbf2c; border-radius: 7px; padding: 8px 16px; margin-bottom: 6px; font-size: 1.04em;}
+  .alert-hidrante { background:#eafaf3; color:#148c34; border-left:5px solid #22c55e;}
+  .section-title {
+    font-size: 1.17em; color: #e53935; font-weight: bold; margin: 14px 0 10px 2px; letter-spacing: 0.01em;
+  }
+  #selected-counter {
+    margin: 9px 0 6px 2px; font-size: 1.11em; font-weight: bold; color: #212;
+    background: #e8f7ed; display: inline-block; border-radius: 7px; padding: 4px 16px 4px 10px;
+    box-shadow: 0 1px 3px #1b7a2a13;
+  }
+  #results {
+    display: grid; grid-template-columns: repeat(4, minmax(235px, 1fr));
+    gap: 1.1em 1.3em; align-items: stretch; width: 100%; justify-content: stretch;
+    margin-top: 0.2em; margin-bottom: 0.5em; min-height: 68px;
+  }
+  .bombero-card {
+    background: linear-gradient(135deg, #fff 85%, #ffeaea 120%);
+    border-radius: 15px;
+    box-shadow: 0 2px 11px #e5393525, 0 1px 2px #e5393508;
+    padding: 0.8em 0.8em 0.8em 0.8em;
+    border-left: 7px solid #e53935;
+    position: relative; font-size: 0.99em; display: flex; gap: 10px; align-items: flex-start;
+    opacity: 0; transform: translateY(22px) scale(0.97);
+    animation: cardIn 0.55s cubic-bezier(.52,1.7,.37,.93) forwards;
+    min-width: 0; width: 100%; margin: 0 auto;
+    transition: box-shadow 0.17s, border 0.13s, transform 0.14s;
+    min-height: 108px; max-height: 132px; height: 132px; cursor: pointer; user-select: none;
+    z-index: 1;
+  }
+  .bombero-card.selected {
+    border-left: 10px solid #198754 !important; box-shadow: 0 8px 34px #19875444, 0 1px 8px #0001;
+    background: linear-gradient(120deg, #e8f5e9 60%, #fff 100%);
+    animation: cardSelected 0.15s;
+    z-index: 10 !important;
+  }
+  .bombero-card.selected:after {
+    content: '✓'; position: absolute; top: 8px; right: 12px; font-size: 1.2em; color: #198754cc; font-weight: bold;
+    background: #fff; border-radius: 50%; box-shadow: 0 0.5px 3px #19875432; padding: 1px 5px 0 5px;
+  }
+  .bombero-card:hover:not(.selected) {
+    box-shadow: 0 8px 32px #e5393533, 0 2px 8px #96001813;
+    border-left: 12px solid #e53935;
+    transform: translateY(-4px) scale(1.025) rotate(-0.5deg); z-index: 2;
+  }
+  @keyframes cardIn { to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes cardSelected { from { box-shadow: 0 0 0 #19875400;} to   { box-shadow: 0 8px 34px #19875444;} }
+  .bombero-img { width: 37px; height: 37px; border-radius: 50%; object-fit: cover; background: #fff4f0; box-shadow: 0 2px 9px #e5393550; border: 2.5px solid #ffeaea; margin-right: 1px; flex-shrink: 0; display: block; transition: transform 0.22s cubic-bezier(.3,1.1,.4,.96); filter: drop-shadow(0 1px 7px #e5393530);}
+  .bombero-card:hover .bombero-img { transform: scale(1.09) rotate(-6deg); filter: brightness(1.07) drop-shadow(0 3px 10px #e5393535);}
+  .bombero-card-content { flex: 1 1 auto; min-width: 0; max-height: 90px; overflow-y: auto; padding-right: 2px; scrollbar-width: thin; scrollbar-color: #e53935 #ffeaea;}
+  .bombero-card-title { font-weight: bold; font-size: 1.04em; color: #e53935; margin-bottom: 6px; letter-spacing: .01em; line-height: 1.1; word-break: break-word; text-shadow: 0 1px 0 #fff7;}
+  .distancia { color: #fff; background: linear-gradient(90deg, #e53935 80%, #ff8d8d 120%); padding: 0.07em 0.6em; border-radius: 12px; font-size: 0.98em; font-weight: 500; margin-left: 5px; vertical-align: middle; box-shadow: 0 1.5px 5px #e5393521;}
+  .bombero-card-content > div { margin-bottom: 1.8px; font-size: 0.98em; color: #181818;}
+  .bombero-card-content > div:last-child { margin-bottom: 0; }
+  .bombero-card b { color: #c20510; }
+  .bombero-card-content::-webkit-scrollbar { width: 6px; background: #ffeaea; border-radius: 8px;}
+  .bombero-card-content::-webkit-scrollbar-thumb { background: #e53935cc; border-radius: 8px;}
+
+  /* ------ PANEL DE RECURSOS CERCANOS ------ */
+  #recursos-cercanos-panel {
+    width: 100%;
+    display: flex;
+    gap: 24px;
+    margin: 0 0 18px 0;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  @media (max-width: 1000px) {
+    #recursos-cercanos-panel { flex-direction: column; gap: 8px;}
+  }
+  .rc-col {
+    flex: 1 1 280px;
+    min-width: 220px;
+    max-width: 370px;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 2px 11px #00000008;
+    padding: 14px 14px 9px 14px;
+    margin-bottom: 0;
+    margin-top: 0;
+  }
+  .rc-title {
+    font-weight: bold;
+    font-size: 1.09em;
+    margin-bottom: 9px;
+    display: flex; align-items: center;
+    gap: 7px;
+  }
+  .rc-title.hidrante { color: #148c34; }
+  .rc-title.fabrica { color: #c48b0a; }
+  .rc-title.estacion { color: #198754; }
+  .rc-item {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    background: #f7fafc;
+    border-left: 4px solid #ffeaea;
+    border-radius: 8px;
+    margin-bottom: 7px;
+    padding: 7px 10px;
+    font-size: 0.98em;
+    transition: box-shadow .18s;
+  }
+  .rc-col.hidrante .rc-item { border-left-color: #22c55e; background: #eafaf3;}
+  .rc-col.fabrica  .rc-item { border-left-color: #fbbf24; background: #fff8e6;}
+  .rc-col.estacion .rc-item { border-left-color: #198754; background: #e9faec;}
+  .rc-dist { font-size: 0.97em; color: #999; min-width: 50px; text-align: right;}
+  .rc-status-operativo { color: #16c23a; font-weight: bold;}
+  .rc-status-inoperativo { color: #e53935; font-weight: bold;}
+
+  @media (max-width: 1600px) { #map-area { width: 38vw; height: 38vw; min-width: 300px; min-height: 300px;} #results { grid-template-columns: repeat(3, 1fr);} }
+  @media (max-width: 1300px) { #results-panel { max-width: 95vw; } #results { grid-template-columns: repeat(2, 1fr);} #map-area { width: 41vw;} }
+  @media (max-width: 1050px) { #dashboard-container { flex-direction: column; align-items: center; padding-left: 0;} #map-area { position: static; width: 97vw; max-width: 99vw; min-width: 170px; height: 250px; min-height: 140px;} #results-panel { max-width: 99vw; } #controls-area { max-width: 98vw; flex-wrap: wrap; } #results { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1.2em 0.8em;} }
+</style>
+
+<div id="dashboard-container">
+  <div id="map-area">
+    <div class="toggle-btns">
+      <button class="toggle-btn" id="toggleHidrantes">Hidrantes</button>
+      <button class="toggle-btn" id="toggleFabricas">Fábricas</button>
+      <button class="toggle-btn" id="toggleEstaciones">Estaciones de Servicio</button>
+      <button class="toggle-btn active" id="toggleRadio">Radio Incidente</button>
+    </div>
+    <div id="map"></div>
+  </div>
+  <div id="results-panel">
+    <div id="fase-titulo">Fase 1: Selección automática de compañías de bomberos</div>
+    <div id="controls-area">
+      <span class="search-label">Radio de búsqueda:</span>
+      <input id="radiusInput" type="range" min="500" max="50000" step="1" value="10000" class="radius-slider">
+      <span id="radiusValue">10000 m</span>
+      <label class="incendio-label">Tipo de incendio:</label>
+      <select id="tipoIncendio" class="incendio-select">
+        <option value="urbano">Urbano</option>
+        <option value="industrial">Industrial</option>
+        <option value="forestal">Forestal</option>
+        <option value="vehicular">Vehicular</option>
+        <option value="otros">Otros</option>
+      </select>
+      <button id="autoSelectBtn" style="margin-left:15px;padding:4px 14px;background:#198754;color:#fff;border-radius:6px;border:none;font-size:1.01em;cursor:pointer;">Auto-seleccionar</button>
+    </div>
+    <!-- PANEL DE RECURSOS CERCANOS -->
+    <div id="recursos-cercanos-panel"></div>
+    <div id="riesgos-alertas"></div>
+    <div id="selected-counter">
+      Compañías seleccionadas: <span id="selected-count" style="color:#198754">0</span>
+    </div>
+    <div class="section-title">Compañías disponibles para seleccionar:</div>
+    <div id="results"></div>
+    <!-- BOTÓN FASE 2 -->
+    <div style="width:100%; text-align:center; margin: 28px 0 0 0;">
+      <a href="{{ url_for('fase2') }}"
+         id="btnFase2"
+         class="toggle-btn"
+         style="background:#198754; color:#fff; padding: 12px 36px; font-size:1.13em; border-radius: 10px; margin-top:12px; display:inline-block; border:none;">
+        Ir a Fase 2 (Ver recursos cercanos)
+      </a>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+const imgURL = "/static/img/Bombero.png";
+const incidenteIconURL = "/static/img/Incendio.png";
+const hidranteIconURL  = "/static/img/hidrante.png";
+const fabricaIconURL   = "/static/img/fabrica.png";
+const estacionIconURL  = "/static/img/gas.png";
+
+let map, circle, bomberosData = [], hidrantesData = [], fabricasData = [], gasolinerasData = [], markers = [];
+let hidrantesMarkers = [], fabricasMarkers = [], estacionesMarkers = [];
+let incidenteMarker = null;
+let lastCenter = null, lastRadius = 10000, selectedCompanyIds = [];
+let lastTipoIncendio = "urbano";
+let showHidrantes = false, showFabricas = false, showEstaciones = false, showRadio = true;
+
+// Crear íconos personalizados
+function getCustomIcon(url, className='') {
+  return L.icon({
+    iconUrl: url,
+    iconSize: [34, 36],
+    iconAnchor: [16, 35],
+    className: className,
+    popupAnchor: [0, -32]
+  });
+}
+function distanceMeters(lat1, lng1, lat2, lng2) {
+  function toRad(x) { return x * Math.PI / 180; }
+  let R = 6371000;
+  let dLat = toRad(lat2 - lat1);
+  let dLon = toRad(lng2 - lng1);
+  let a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+window.toggleCia = function(idx) {
+  if (selectedCompanyIds.includes(idx)) {
+    selectedCompanyIds = selectedCompanyIds.filter(i => i !== idx);
+  } else {
+    selectedCompanyIds.push(idx);
+  }
+  updateResults(lastCenter, lastRadius, lastTipoIncendio);
+};
+function highlightIcon(selected) {
+  return new L.Icon({
+      iconUrl: selected ? '/static/img/Bombero.png' : '/static/img/Bombero.png',
+      iconSize: [30, 34],
+      iconAnchor: [13, 34],
+      popupAnchor: [1,-34],
+  });
+}
+
+// NUEVO: Solo muestra POIs (hidrantes, fábricas, estaciones) en el radio
+function updatePOIsInRadio(center, radius) {
+  // Limpiar antiguos marcadores del mapa
+  hidrantesMarkers.forEach(mk => map.removeLayer(mk));
+  fabricasMarkers.forEach(mk => map.removeLayer(mk));
+  estacionesMarkers.forEach(mk => map.removeLayer(mk));
+  hidrantesMarkers = [];
+  fabricasMarkers = [];
+  estacionesMarkers = [];
+
+  // Hidrantes dentro del radio
+  hidrantesData.forEach(hid => {
+    if (hid.lat && hid.lng && distanceMeters(center[0], center[1], hid.lat, hid.lng) <= radius) {
+      let mk = L.marker([hid.lat, hid.lng], {icon: getCustomIcon(hidranteIconURL)})
+        .bindPopup(`<b>Hidrante</b><br>${hid.nombre ?? ""}`);
+      hidrantesMarkers.push(mk);
+      if (showHidrantes) mk.addTo(map);
+    }
+  });
+  // Fábricas dentro del radio
+  fabricasData.forEach(fab => {
+    if (fab.lat && fab.lng && distanceMeters(center[0], center[1], fab.lat, fab.lng) <= radius) {
+      let mk = L.marker([fab.lat, fab.lng], {icon: getCustomIcon(fabricaIconURL)})
+        .bindPopup(`<b>Fábrica</b><br>${fab.nombre ?? ""}`);
+      fabricasMarkers.push(mk);
+      if (showFabricas) mk.addTo(map);
+    }
+  });
+  // Estaciones dentro del radio
+  gasolinerasData.forEach(gas => {
+    if (gas.lat && gas.lng && distanceMeters(center[0], center[1], gas.lat, gas.lng) <= radius) {
+      let mk = L.marker([gas.lat, gas.lng], {icon: getCustomIcon(estacionIconURL)})
+        .bindPopup(`<b>Estación de Servicio</b><br>${gas.ruc ?? ""}<br><i>${gas.actividad ?? ""}</i>`);
+      estacionesMarkers.push(mk);
+      if (showEstaciones) mk.addTo(map);
+    }
+  });
+}
+
+function updatePOIVisibility() {
+  hidrantesMarkers.forEach(m => showHidrantes ? m.addTo(map) : map.removeLayer(m));
+  fabricasMarkers.forEach(m => showFabricas ? m.addTo(map) : map.removeLayer(m));
+  estacionesMarkers.forEach(m => showEstaciones ? m.addTo(map) : map.removeLayer(m));
+  if (circle) showRadio ? circle.addTo(map) : map.removeLayer(circle);
+  if (incidenteMarker) incidenteMarker.addTo(map);
+}
+
+function updateResults(center, radius, tipoIncendio) {
+  let resultsDiv = document.getElementById("results");
+  let alertasDiv = document.getElementById("riesgos-alertas");
+  let selectedCount = document.getElementById("selected-count");
+  let recursosPanel = document.getElementById("recursos-cercanos-panel");
+  if (!center) {
+    resultsDiv.innerHTML = "";
+    alertasDiv.innerHTML = "";
+    selectedCount.textContent = 0;
+    recursosPanel.innerHTML = "";
+    markers.forEach(mk => mk.setIcon(new L.Icon.Default()));
+    return;
+  }
+
+  // ------ NUEVO: Panel de recursos cercanos ------
+  function getClosest(arr, n, keyLat='lat', keyLng='lng') {
+    return arr
+      .filter(obj => obj[keyLat] && obj[keyLng])
+      .map(obj => ({...obj, dist: distanceMeters(center[0], center[1], obj[keyLat], obj[keyLng])}))
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, n);
+  }
+  // Hidrantes
+  const closestHidrantes = getClosest(hidrantesData, 7);
+  // Fábricas
+  const closestFabricas = getClosest(fabricasData, 5);
+  // Estaciones
+  const closestEstaciones = getClosest(gasolinerasData, 5);
+
+  recursosPanel.innerHTML = `
+    <div class="rc-col hidrante">
+      <div class="rc-title hidrante">
+        <img src="/static/img/hidrante.png" style="width:24px;vertical-align:middle;"> Hidrantes más cercanos
+      </div>
+      ${closestHidrantes.length ? closestHidrantes.map(h => `
+        <div class="rc-item">
+          <span>
+            <b>${h.nombre ?? "Sin nombre"}</b><br>
+            <span class="rc-status-${(h.estado && h.estado.toLowerCase() === "operativo") ? "operativo" : "inoperativo"}">
+              ${h.estado ?? "SIN ESTADO"}
+            </span>
+          </span>
+          <span class="rc-dist">${Math.round(h.dist)} m</span>
+        </div>
+      `).join('') : `<div class="rc-item">No hay hidrantes cerca</div>`}
+    </div>
+    <div class="rc-col fabrica">
+      <div class="rc-title fabrica">
+        <img src="/static/img/fabrica.png" style="width:24px;vertical-align:middle;"> Fábricas más cercanas
+      </div>
+      ${closestFabricas.length ? closestFabricas.map(f => `
+        <div class="rc-item">
+          <span>
+            <b>${f.nombre ?? "Sin nombre"}</b><br>
+            <span>${f.actividad ?? ""}</span>
+          </span>
+          <span class="rc-dist">${Math.round(f.dist)} m</span>
+        </div>
+      `).join('') : `<div class="rc-item">No hay fábricas cerca</div>`}
+    </div>
+    <div class="rc-col estacion">
+      <div class="rc-title estacion">
+        <img src="/static/img/gas.png" style="width:24px;vertical-align:middle;"> Estaciones de servicio más cercanas
+      </div>
+      ${closestEstaciones.length ? closestEstaciones.map(e => `
+        <div class="rc-item">
+          <span>
+            <b>${e.nombre ?? e.ruc ?? "Sin nombre"}</b><br>
+            <span>${e.actividad ?? ""}</span>
+          </span>
+          <span class="rc-dist">${Math.round(e.dist)} m</span>
+        </div>
+      `).join('') : `<div class="rc-item">No hay estaciones cerca</div>`}
+    </div>
+  `;
+
+  // ----- (lo demás de la función, igual) -----
+  // Alerta de riesgos e hidrantes cercanos
+  let riesgos = [];
+  let hidrantes = [];
+  let radioRiesgo = 400;
+  let radioHidrante = 250;
+  gasolinerasData.forEach(gas => {
+    let d = distanceMeters(center[0], center[1], gas.lat, gas.lng);
+    if (d <= radioRiesgo) riesgos.push({ tipo: "Estación de Servicio", nombre: gas.nombre, distancia: Math.round(d) });
+  });
+  fabricasData.forEach(fab => {
+    let d = distanceMeters(center[0], center[1], fab.lat, fab.lng);
+    if (d <= radioRiesgo) riesgos.push({ tipo: "Fábrica", nombre: fab.nombre, distancia: Math.round(d) });
+  });
+  hidrantesData.forEach(hid => {
+    let d = distanceMeters(center[0], center[1], hid.lat, hid.lng);
+    if (d <= radioHidrante) hidrantes.push({ nombre: hid.nombre, distancia: Math.round(d) });
+  });
+  alertasDiv.innerHTML =
+    (riesgos.length ? riesgos.map(r => `<div class="alert-riesgo">⚠️ ${r.tipo} cerca (${r.nombre} a ${r.distancia}m)</div>`).join('') : '') +
+    (hidrantes.length ? hidrantes.map(h => `<div class="alert-hidrante">💧 Hidrante a ${h.distancia}m</div>`).join('') : '');
+
+  // Renderiza compañías
+  let found = [];
+  markers.forEach((mk, i) => {
+    let cia = bomberosData[i];
+    let d = distanceMeters(center[0], center[1], cia.lat, cia.lng);
+    if (d <= radius) {
+      found.push({ ...cia, distancia: Math.round(d), marker: mk, idx: i });
+      mk.setIcon(highlightIcon(selectedCompanyIds.includes(i)));
+    } else {
+      mk.setIcon(new L.Icon.Default());
+    }
+  });
+  selectedCount.textContent = selectedCompanyIds.length;
+  resultsDiv.innerHTML = found.length ? found.map((cia, idx) => `
+      <div class="bombero-card${selectedCompanyIds.includes(cia.idx) ? " selected" : ""}" style="animation-delay:${idx*27}ms;" onclick="toggleCia(${cia.idx})">
+        <img class="bombero-img" src="${imgURL}" alt="Compañía de bomberos">
+        <div class="bombero-card-content">
+          <div class="bombero-card-title">${cia.nombre}
+            <span class="distancia">${cia.distancia} m</span>
+          </div>
+          <div><b>Bomberos:</b> ${cia.bomberos_disponibles ?? 'N/A'} | <b>Vehículos:</b> ${cia.vehiculos_disponibles ?? 'N/A'}</div>
+          <div><b>Responsable:</b> ${cia.nombre_responsable ?? '-'} | <b>Cargo:</b> ${cia.cargo_responsable ?? '-'}</div>
+        </div>
+      </div>
+  `).join('') : "<span style='color:#999;margin:8px;'>No hay compañías de bomberos dentro del radio seleccionado.</span>";
+  updatePOIVisibility();
+}
+
+function autoSeleccionarCompanias(center, tipoIncendio) {
+  let radio = { urbano: 7000, industrial: 11000, forestal: 12000, vehicular: 4000, otros: 7000 }[tipoIncendio] || 7000;
+  let minBomberos = (tipoIncendio === "industrial" || tipoIncendio === "forestal") ? 8 : 4;
+  let minVehiculos = (tipoIncendio === "industrial" || tipoIncendio === "forestal") ? 2 : 1;
+  let candidatos = bomberosData.map((cia, i) => {
+    let d = distanceMeters(center[0], center[1], cia.lat, cia.lng);
+    return { ...cia, idx: i, distancia: d };
+  })
+  .filter(cia => cia.distancia <= radio && (cia.bomberos_disponibles || 0) >= minBomberos && (cia.vehiculos_disponibles || 0) >= minVehiculos)
+  .sort((a, b) => a.distancia - b.distancia);
+  selectedCompanyIds = candidatos.slice(0, 3).map(c => c.idx);
+  updateResults(center, radio, tipoIncendio);
+  document.getElementById('radiusInput').value = radio;
+  document.getElementById('radiusValue').textContent = `${radio} m`;
+  lastRadius = radio;
+  if (circle) circle.setRadius(radio);
+  if (lastCenter) {
+    localStorage.setItem("incidente_lat", lastCenter[0]);
+    localStorage.setItem("incidente_lng", lastCenter[1]);
+    localStorage.setItem("radio", radio);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+  map = L.map('map').setView([-12.04318, -77.02824], 11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: 'Map data © OpenStreetMap contributors'
+  }).addTo(map);
+
+  Promise.all([
+    fetch('/static/json/bomberos.json').then(r => r.json()).catch(()=>[]),
+    fetch('/static/json/hidrantes.json').then(r => r.json()).catch(()=>[]),
+    fetch('/static/json/fabricas.json').then(r => r.json()).catch(()=>[]),
+    fetch('/static/json/servicio.json').then(r => r.json()).catch(()=>[])
+  ]).then(([bomberos, hidrantes, fabricas, gasolineras]) => {
+      bomberosData = bomberos;
+      hidrantesData = hidrantes;
+      fabricasData = fabricas;
+      // Normalización para gasolineras (servicio.json)
+      gasolinerasData = gasolineras.map(g => ({
+        ...g,
+        lat: g.lat ?? g.latitud,
+        lng: g.lng ?? g.longitud,
+        nombre: g.nombre ?? g.ruc,
+      }));
+
+      // Render markers de bomberos
+      bomberosData.forEach((cia, idx) => {
+        let mk = L.marker([cia.lat, cia.lng], {icon: highlightIcon(false)}).addTo(map)
+          .bindPopup(`<b>${cia.nombre}</b><br>
+            Bomberos: ${cia.bomberos_disponibles ?? 'N/A'}<br>
+            Vehículos: ${cia.vehiculos_disponibles ?? 'N/A'}<br>
+            Responsable: ${cia.nombre_responsable ?? ''}<br>
+            Cargo: ${cia.cargo_responsable ?? ''}`);
+        markers.push(mk);
+      });
+      // Inicializa los POIs en el radio inicial
+      lastCenter = [-12.04318, -77.02824];
+      updatePOIsInRadio(lastCenter, lastRadius);
+      updateResults(lastCenter, lastRadius, lastTipoIncendio);
+  });
+
+  map.on('click', function(e) {
+    lastCenter = [e.latlng.lat, e.latlng.lng];
+    lastRadius = parseInt(document.getElementById('radiusInput').value) || 10000;
+    lastTipoIncendio = document.getElementById('tipoIncendio').value;
+    if (circle) map.removeLayer(circle);
+    circle = L.circle(e.latlng, {
+      color: '#ff6600',
+      fillColor: '#ffa60044',
+      fillOpacity: 0.19,
+      radius: lastRadius
+    });
+    if (showRadio) circle.addTo(map);
+    if (incidenteMarker) map.removeLayer(incidenteMarker);
+    incidenteMarker = L.marker(e.latlng, {
+      icon: getCustomIcon(incidenteIconURL)
+    }).addTo(map).bindPopup("Lugar del Incendio").openPopup();
+    selectedCompanyIds = [];
+    updateResults(lastCenter, lastRadius, lastTipoIncendio);
+    updatePOIsInRadio(lastCenter, lastRadius);
+    updatePOIVisibility();
+    localStorage.setItem("incidente_lat", e.latlng.lat);
+    localStorage.setItem("incidente_lng", e.latlng.lng);
+    localStorage.setItem("radio", lastRadius);
+  });
+
+  document.getElementById('radiusInput').addEventListener('input', function() {
+    let r = parseInt(this.value) || 10000;
+    lastRadius = r;
+    document.getElementById('radiusValue').textContent = `${r} m`;
+    if (circle) {
+      circle.setRadius(r);
+      if (lastCenter) updateResults(lastCenter, r, lastTipoIncendio);
+      if (lastCenter) {
+        updatePOIsInRadio(lastCenter, lastRadius);
+        updatePOIVisibility();
+      }
+      localStorage.setItem("radio", r);
+      if (lastCenter) {
+        localStorage.setItem("incidente_lat", lastCenter[0]);
+        localStorage.setItem("incidente_lng", lastCenter[1]);
+      }
+    }
+  });
+
+  document.getElementById('tipoIncendio').addEventListener('change', function() {
+    lastTipoIncendio = this.value;
+    if (lastCenter) updateResults(lastCenter, lastRadius, lastTipoIncendio);
+  });
+
+  document.getElementById('autoSelectBtn').addEventListener('click', function() {
+    if (!lastCenter) {
+      alert("Debes seleccionar primero el lugar del incendio en el mapa.");
+      return;
+    }
+    lastTipoIncendio = document.getElementById('tipoIncendio').value;
+    autoSeleccionarCompanias(lastCenter, lastTipoIncendio);
+  });
+
+  // ---- CONTROL DE VISIBILIDAD POIs ----
+  document.getElementById('toggleHidrantes').onclick = function() {
+    showHidrantes = !showHidrantes;
+    this.classList.toggle("active", showHidrantes);
+    updatePOIVisibility();
+  };
+  document.getElementById('toggleFabricas').onclick = function() {
+    showFabricas = !showFabricas;
+    this.classList.toggle("active", showFabricas);
+    updatePOIVisibility();
+  };
+  document.getElementById('toggleEstaciones').onclick = function() {
+    showEstaciones = !showEstaciones;
+    this.classList.toggle("active", showEstaciones);
+    updatePOIVisibility();
+  };
+  document.getElementById('toggleRadio').onclick = function() {
+    showRadio = !showRadio;
+    this.classList.toggle("active", showRadio);
+    updatePOIVisibility();
+  };
+});
+</script>
+
+{% endblock %}

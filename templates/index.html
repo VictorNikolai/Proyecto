@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="index-bg">
+  <div class="container-center">
+    <h1 class="index-title">Sistema Central de Emergencias</h1>
+    <div class="card-wrapper">
+
+      <!-- OPERADOR(A) -->
+      <div class="card">
+        <img class="card-img-top" src="{{ url_for('static', filename='img/operadora.png') }}" alt="Operador(a)">
+        <div class="card-body">
+          <h5 class="card-title">Operador(a)</h5>
+          <p class="text-muted">Gestiona incidentes y recursos en tiempo real.</p>
+          <a href="{{ url_for('auth_options', user_type='operadora') }}" class="btn btn-primary">Ingresar</a>
+        </div>
+      </div>
+
+      <!-- BOMBERO(A) -->
+      <div class="card">
+        <img class="card-img-top" src="{{ url_for('static', filename='img/bombero.png') }}" alt="Bombero(a)">
+        <div class="card-body">
+          <h5 class="card-title">Bombero(a)</h5>
+          <p class="text-muted">Accede a tus asignaciones y alertas.</p>
+          <a href="{{ url_for('auth_options', user_type='bombero') }}" class="btn btn-secondary">Ingresar</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
