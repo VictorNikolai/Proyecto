@@ -1,22 +1,266 @@
 {% extends "base.html" %}
+{% block title %}Fase 2: Recursos Cercanos{% endblock %}
+
 {% block content %}
-<div style="display:flex;flex-direction:column;align-items:center;">
-  <h2>Fase 2: Recursos Cercanos al Incidente</h2>
-  <div id="map" style="width:900px;height:500px;border-radius:16px;margin-bottom:20px;"></div>
-  <input type="hidden" id="incidenteLat">
-  <input type="hidden" id="incidenteLng">
-  <label>
-    Radio:
-    <input type="range" id="radiusInput" min="500" max="20000" value="10000" style="vertical-align:middle;">
-    <span id="radiusValue">10000</span> m
-  </label>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<style>
+  body, .f2-main { background: #f9fafc; }
+  .f2-main {
+    max-width: 1150px;
+    margin: 38px auto 24px auto;
+    padding: 25px 16px 50px 16px;
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 4px 32px #e539351c;
+    display: flex; flex-direction: column; gap: 28px;
+  }
+  .f2-header { 
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
+    flex-wrap: wrap;
+  }
+  .f2-title {
+    color: #e53935; font-weight: bold; font-size: 1.72em; letter-spacing: 0.02em;
+  }
+  .f2-btn-save {
+    background: #e53935; color: #fff; border: none; border-radius: 8px;
+    font-weight: bold; padding: 12px 34px; font-size: 1.08em; cursor: pointer;
+    box-shadow: 0 3px 12px #e5393522;
+    transition: background .16s;
+  }
+  .f2-btn-save:hover { background: #c62828; }
+  .f2-section {
+    background: #fff4f4;
+    border-radius: 13px;
+    box-shadow: 0 2px 11px #e5393511;
+    padding: 20px 22px 17px 22px;
+    margin-bottom: 0;
+  }
+  .f2-section-title {
+    font-size: 1.23em; font-weight: bold; color: #c62828; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 9px;
+  }
+  .f2-cols { display: flex; gap: 22px; flex-wrap: wrap; }
+  .f2-col { flex: 1 1 280px; min-width: 240px; max-width: 350px;}
+  .f2-card {
+    background: #fff;
+    border-radius: 11px;
+    box-shadow: 0 1px 6px #e5393530;
+    padding: 13px 18px 10px 15px;
+    margin-bottom: 10px;
+    border-left: 6px solid #e53935;
+  }
+  .f2-card-header { font-weight: bold; color: #e53935; font-size: 1.08em; }
+  .f2-card-content { font-size: 0.98em; color: #232323; }
+  .f2-dist { color: #c62828; font-weight: bold; }
+  .f2-operativo { color: #16c23a; font-weight: bold;}
+  .f2-inoperativo { color: #e53935; font-weight: bold;}
+  .f2-location {
+    background: #ffeaea; border-radius: 8px; padding: 7px 15px; margin: 5px 0 0 0;
+    color: #b71c1c; font-size: 1.08em; display: inline-block; font-weight: 500;
+  }
+  .f2-mapa { width: 100%; height: 320px; border-radius: 14px; margin: 19px 0 0 0; box-shadow: 0 2px 11px #e5393510;}
+  .f2-small { font-size: 0.98em; color: #888; margin-left: 10px; }
+  @media (max-width: 800px) {
+    .f2-cols { flex-direction: column; gap: 10px; }
+    .f2-col { max-width: 100%; min-width: 100%; }
+    .f2-header { flex-direction: column; gap: 12px;}
+  }
+</style>
+
+<div class="f2-main">
+  <div class="f2-header">
+    <span class="f2-title">Fase 2: Recursos Cercanos y Resumen del Incidente</span>
+    <button id="btnSaveReporte" class="f2-btn-save">Guardar Reporte</button>
+  </div>
+
+  <div class="f2-section">
+    <div class="f2-section-title">
+      <img src="/static/img/Incendio.png" style="width:28px;"> Ubicación del Incidente
+    </div>
+    <div id="f2-ubicacion">
+      <span><b>Coordenadas:</b> <span id="f2-coords">-</span></span>
+      <span class="f2-location" id="f2-dir">Buscando dirección...</span>
+    </div>
+    <div id="f2-mapa" class="f2-mapa"></div>
+  </div>
+
+  <div class="f2-section">
+    <div class="f2-section-title">
+      <img src="/static/img/Bombero.png" style="width:26px;"> Compañías de Bomberos Seleccionadas
+    </div>
+    <div class="f2-cols" id="f2-companias"></div>
+  </div>
+
+  <div class="f2-section">
+    <div class="f2-section-title">
+      <img src="/static/img/hidrante.png" style="width:26px;"> Hidrantes Más Cercanos
+    </div>
+    <div class="f2-cols" id="f2-hidrantes"></div>
+  </div>
+
+  <div class="f2-section">
+    <div class="f2-section-title">
+      <img src="/static/img/fabrica.png" style="width:26px;"> Fábricas Más Cercanas
+    </div>
+    <div class="f2-cols" id="f2-fabricas"></div>
+  </div>
+
+  <div class="f2-section">
+    <div class="f2-section-title">
+      <img src="/static/img/gas.png" style="width:26px;"> Estaciones de Servicio Más Cercanas
+    </div>
+    <div class="f2-cols" id="f2-estaciones"></div>
+  </div>
+
+  <div class="f2-section">
+    <div class="f2-section-title">
+      <img src="/static/img/hidrante.png" style="width:22px;"> Hidrantes Adicionales (posibles de usar)
+    </div>
+    <div class="f2-cols" id="f2-hidrantes-extra"></div>
+  </div>
 </div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-  // Recupera del localStorage los valores guardados en la Fase 1
-  document.getElementById('incidenteLat').value = localStorage.getItem("incidente_lat") || -12.0464;
-  document.getElementById('incidenteLng').value = localStorage.getItem("incidente_lng") || -77.0428;
-  document.getElementById('radiusInput').value = localStorage.getItem("radio") || 10000;
-  document.getElementById('radiusValue').textContent = document.getElementById('radiusInput').value;
+// --- Utilidades ---
+function distanceMeters(lat1, lng1, lat2, lng2) {
+  function toRad(x) { return x * Math.PI / 180; }
+  let R = 6371000;
+  let dLat = toRad(lat2 - lat1);
+  let dLon = toRad(lng2 - lng1);
+  let a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function getClosest(arr, n, lat, lng, keyLat='lat', keyLng='lng', skipIds=[]) {
+  return arr
+    .filter(obj => obj[keyLat] && obj[keyLng] && !skipIds.includes(obj.id))
+    .map(obj => ({...obj, dist: distanceMeters(lat, lng, obj[keyLat], obj[keyLng])}))
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, n);
+}
+
+function showCard(data, type='cia') {
+  if (type === 'cia') {
+    return `<div class="f2-col"><div class="f2-card">
+      <div class="f2-card-header">${data.nombre}</div>
+      <div class="f2-card-content">
+        <b>Bomberos:</b> ${data.bomberos_disponibles ?? '-'}<br>
+        <b>Vehículos:</b> ${data.vehiculos_disponibles ?? '-'}<br>
+        <b>Responsable:</b> ${data.nombre_responsable ?? '-'}<br>
+        <b>Cargo:</b> ${data.cargo_responsable ?? '-'}
+      </div></div></div>`;
+  }
+  if (type === 'hidrante') {
+    return `<div class="f2-col"><div class="f2-card">
+      <div class="f2-card-header">${data.nombre ?? 'Sin nombre'}</div>
+      <div class="f2-card-content">
+        <b>Estado:</b> <span class="${(data.estado && data.estado.toLowerCase() === 'operativo') ? 'f2-operativo' : 'f2-inoperativo'}">${data.estado ?? 'Sin estado'}</span><br>
+        <b>Distancia:</b> <span class="f2-dist">${Math.round(data.dist)} m</span>
+      </div></div></div>`;
+  }
+  if (type === 'fabrica') {
+    return `<div class="f2-col"><div class="f2-card">
+      <div class="f2-card-header">${data.nombre ?? 'Sin nombre'}</div>
+      <div class="f2-card-content">
+        <b>Actividad:</b> ${data.actividad ?? '-'}<br>
+        <b>Distancia:</b> <span class="f2-dist">${Math.round(data.dist)} m</span>
+      </div></div></div>`;
+  }
+  if (type === 'estacion') {
+    return `<div class="f2-col"><div class="f2-card">
+      <div class="f2-card-header">${data.nombre ?? data.ruc ?? 'Sin nombre'}</div>
+      <div class="f2-card-content">
+        <b>Actividad:</b> ${data.actividad ?? '-'}<br>
+        <b>Distancia:</b> <span class="f2-dist">${Math.round(data.dist)} m</span>
+      </div></div></div>`;
+  }
+  return '';
+}
+
+// --- Principal ---
+document.addEventListener('DOMContentLoaded', async function() {
+  // 1. Recuperar datos
+  const companiasIds = JSON.parse(localStorage.getItem("companias_seleccionadas") || "[]");
+  const incidenteLat = parseFloat(localStorage.getItem("incidente_lat") || "-12.04");
+  const incidenteLng = parseFloat(localStorage.getItem("incidente_lng") || "-77.03");
+  const radio = parseInt(localStorage.getItem("radio_seleccionado") || "10000");
+
+  // 2. Cargar JSON
+  const [bomberos, hidrantes, fabricas, gasolineras] = await Promise.all([
+    fetch('/static/json/bomberos.json').then(r=>r.json()).catch(()=>[]),
+    fetch('/static/json/hidrantes.json').then(r=>r.json()).catch(()=>[]),
+    fetch('/static/json/fabricas.json').then(r=>r.json()).catch(()=>[]),
+    fetch('/static/json/servicio.json').then(r=>r.json()).catch(()=>[])
+  ]);
+
+  // 3. Mostrar ubicación y dirección
+  document.getElementById('f2-coords').textContent = `${incidenteLat.toFixed(6)}, ${incidenteLng.toFixed(6)}`;
+  fetch(`https://nominatim.openstreetmap.org/reverse?lat=${incidenteLat}&lon=${incidenteLng}&format=json`)
+    .then(r => r.json())
+    .then(data => {
+      const addr = data.address;
+      const distrito = addr.suburb || addr.city_district || addr.town || addr.village || '';
+      const provincia = addr.county || addr.state_district || '';
+      const depa = addr.state || '';
+      document.getElementById('f2-dir').textContent = `${distrito}, ${provincia}, ${depa}`.replace(/^,|,,/g,'').replace(/ ,/g,',');
+    }).catch(()=>{ document.getElementById('f2-dir').textContent = "No disponible"; });
+
+  // Mapa del incidente
+  let map = L.map('f2-mapa').setView([incidenteLat, incidenteLng], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: 'Map data © OpenStreetMap contributors'
+  }).addTo(map);
+  L.marker([incidenteLat, incidenteLng], {icon: L.icon({iconUrl:'/static/img/Incendio.png',iconSize:[44,48],iconAnchor:[22,47]})})
+    .addTo(map).bindPopup('Incidente').openPopup();
+
+  // 4. Mostrar compañías seleccionadas
+  document.getElementById('f2-companias').innerHTML = companiasIds.length
+    ? companiasIds.map(idx => showCard(bomberos[idx], 'cia')).join('')
+    : '<span style="color:#c62828;font-weight:bold;">No se seleccionó ninguna compañía.</span>';
+
+  // 5. Mostrar recursos cercanos (6 más cercanos)
+  const hidrantesCercanos = getClosest(hidrantes, 6, incidenteLat, incidenteLng);
+  document.getElementById('f2-hidrantes').innerHTML = hidrantesCercanos.map(h => showCard(h, 'hidrante')).join('');
+
+  const fabricasCercanas = getClosest(fabricas, 6, incidenteLat, incidenteLng);
+  document.getElementById('f2-fabricas').innerHTML = fabricasCercanas.map(f => showCard(f, 'fabrica')).join('');
+
+  const estacionesCercanas = getClosest(gasolineras, 6, incidenteLat, incidenteLng);
+  document.getElementById('f2-estaciones').innerHTML = estacionesCercanas.map(e => showCard(e, 'estacion')).join('');
+
+  // 6. Hidrantes adicionales (los siguientes 4 más lejanos dentro del radio)
+  let usados = hidrantesCercanos.map(h=>h.id);
+  const hidrantesAdicionales = hidrantes
+    .filter(h => h.lat && h.lng && distanceMeters(incidenteLat, incidenteLng, h.lat, h.lng) <= radio && !usados.includes(h.id))
+    .map(h => ({...h, dist: distanceMeters(incidenteLat, incidenteLng, h.lat, h.lng)}))
+    .sort((a,b)=>a.dist-b.dist)
+    .slice(0,4);
+  document.getElementById('f2-hidrantes-extra').innerHTML = hidrantesAdicionales.length
+    ? hidrantesAdicionales.map(h => showCard(h, 'hidrante')).join('')
+    : '<span class="f2-small">No hay más hidrantes posibles dentro del radio.</span>';
+
+  // 7. Guardar reporte en localStorage
+  document.getElementById('btnSaveReporte').onclick = function() {
+    const reporte = {
+      timestamp: Date.now(),
+      incidente: {lat: incidenteLat, lng: incidenteLng},
+      radio,
+      direccion: document.getElementById('f2-dir').textContent,
+      companias: companiasIds.map(idx => bomberos[idx]),
+      hidrantes: hidrantesCercanos,
+      hidrantesExtra: hidrantesAdicionales,
+      fabricas: fabricasCercanas,
+      estaciones: estacionesCercanas
+    };
+    let reportes = JSON.parse(localStorage.getItem("reportes_guardados") || "[]");
+    reportes.push(reporte);
+    localStorage.setItem("reportes_guardados", JSON.stringify(reportes));
+    alert("Reporte guardado correctamente.");
+  };
+});
 </script>
-<script src="{{ url_for('static', filename='js/map_logic_fase2.js') }}"></script>
 {% endblock %}
