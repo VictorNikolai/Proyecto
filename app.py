@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 import pymysql
 import config
 from werkzeug.security import generate_password_hash, check_password_hash
+import json
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
@@ -40,7 +41,7 @@ def login(user_type):
         if row and row['dni'] == dni and check_password_hash(row['password_hash'], pwd):
             session['user_type'] = user_type
             session['user_id'] = row['id']
-            return redirect(url_for('operadora_dashboard' if user_type=='operadora' else 'bombero_dashboard'))
+            return redirect(url_for('operadora_dashboard' if user_type=='operadora' else 'dashboard_bombero'))
         error = "Credenciales inválidas"
     return render_template('login.html', user_type=user_type, error=error)
 
@@ -53,17 +54,13 @@ def register(user_type):
         pwd = request.form['password']
         pwd_hash = generate_password_hash(pwd)
         try:
-            print('Conectando a BD...') # Debug
             db = get_db()
             cur = db.cursor()
-            print('Ejecutando INSERT...') # Debug
             cur.execute("INSERT INTO users (username,dni,password_hash,user_type) VALUES (%s,%s,%s,%s)",
                         (user, dni, pwd_hash, user_type))
             db.commit()
-            print('Registro exitoso.') # Debug
             return redirect(url_for('login', user_type=user_type))
         except Exception as e:
-            print("Error en el registro:", e)
             error = "Error en el registro. ¿Usuario ya existe?"
     return render_template('register.html', user_type=user_type, error=error)
 
@@ -73,16 +70,69 @@ def operadora_dashboard():
         return redirect(url_for('index'))
     return render_template('operadora_dashboard.html')
 
+# --------------- FASE 2: GUARDAR REPORTE -----------------
+@app.route('/fase2')
+def fase2():
+    return render_template('fase2_recursos.html')
+
+@app.route('/guardar_reporte', methods=['POST'])
+def guardar_reporte():
+    import json
+    id_bombero = session.get('user_id')
+    if not id_bombero:
+        return jsonify({"ok": False, "error": "No autenticado"}), 403
+
+    data = request.json
+    tipo_incidente = data.get('tipo_incidente')
+    departamento = data.get('departamento')
+    provincia = data.get('provincia')
+    distrito = data.get('distrito')
+    latitud = data.get('latitud')
+    longitud = data.get('longitud')
+    companias = json.dumps(data.get('companias', []))
+    hidrantes = json.dumps(data.get('hidrantes', []))
+    fabricas = json.dumps(data.get('fabricas', []))
+    estaciones = json.dumps(data.get('estaciones', []))
+
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO reportes (id_bombero, tipo_incidente, departamento, provincia, distrito, latitud, longitud, companias, hidrantes, fabricas, estaciones, fecha)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        """, (
+            id_bombero, tipo_incidente, departamento, provincia, distrito,
+            latitud, longitud, companias, hidrantes, fabricas, estaciones
+        ))
+        conn.commit()
+    return jsonify({"ok": True})
+
+# ----------------------------------------------------------
+
 @app.route('/dashboard/bombero')
-def bombero_dashboard():
+def dashboard_bombero():
+    # Solo los bomberos pueden acceder
     if session.get('user_type') != 'bombero':
         return redirect(url_for('index'))
-    return "<h2>Dashboard Bombero (pendiente)</h2>"
 
-# --------------------
-# NUEVOS ENDPOINTS API
-# --------------------
-
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT r.tipo_incidente, r.departamento, r.provincia, r.distrito,
+                   r.latitud, r.longitud, r.companias, r.hidrantes, r.fabricas, r.estaciones, r.fecha,
+                   u.username
+            FROM reportes r
+            JOIN users u ON r.id_bombero = u.id
+            ORDER BY r.fecha DESC
+        """)
+        reportes = []
+        for row in cur.fetchall():
+            row['companias'] = json.loads(row['companias']) if row['companias'] else []
+            row['hidrantes'] = json.loads(row['hidrantes']) if row['hidrantes'] else []
+            row['fabricas'] = json.loads(row['fabricas']) if row['fabricas'] else []
+            row['estaciones'] = json.loads(row['estaciones']) if row['estaciones'] else []
+            reportes.append(row)
+    return render_template('dashboard_bombero.html', reportes=reportes)
+# -------------------- ENDPOINTS DE DATOS --------------------
 @app.route('/api/companias')
 def api_companias():
     db = get_db()
@@ -132,8 +182,6 @@ def get_estaciones():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
-
 @app.route('/api/hidrantes')
 def api_hidrantes():
     db = get_db()
@@ -150,16 +198,7 @@ def api_hidrantes():
             "lng": float(row['lng'])
         })
     return jsonify(data)
-
-# -------------------
-# FIN NUEVOS ENDPOINTS
-# -------------------
-
-# ----------- AQUI AGREGA LA RUTA DE FASE 2 -------------
-@app.route('/fase2')
-def fase2():
-    return render_template('fase2_recursos.html')
-# --------------------------------------------------------
+# -----------------------------------------------------------
 
 if __name__ == '__main__':
     app.run(debug=True)
