@@ -188,12 +188,12 @@
     <div id="results"></div>
     <!-- BOTÓN FASE 2 -->
     <div style="width:100%; text-align:center; margin: 28px 0 0 0;">
-      <a href="{{ url_for('fase2') }}"
+      <button
          id="btnFase2"
          class="toggle-btn"
          style="background:#198754; color:#fff; padding: 12px 36px; font-size:1.13em; border-radius: 10px; margin-top:12px; display:inline-block; border:none;">
         Ir a Fase 2 (Ver recursos cercanos)
-      </a>
+      </button>
     </div>
   </div>
 </div>
@@ -565,6 +565,22 @@ document.addEventListener("DOMContentLoaded", function() {
     this.classList.toggle("active", showRadio);
     updatePOIVisibility();
   };
+
+  // Guardar datos de selección antes de ir a Fase 2
+  document.getElementById('btnFase2').addEventListener('click', function() {
+      if (!lastCenter || selectedCompanyIds.length === 0) {
+          alert('Debes seleccionar al menos una compañía y un lugar de incidente.');
+          return;
+      }
+      // Guarda selección y datos relevantes en localStorage
+      localStorage.setItem("companias_seleccionadas", JSON.stringify(selectedCompanyIds));
+      localStorage.setItem("radio_seleccionado", lastRadius);
+      localStorage.setItem("incidente_lat", lastCenter[0]);
+      localStorage.setItem("incidente_lng", lastCenter[1]);
+      // Redirige a Fase 2
+      window.location.href = "{{ url_for('fase2') }}";
+  });
+
 });
 </script>
 
