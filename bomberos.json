@@ -11,7 +11,7 @@
   },
   {
     "idCompaniaBomberos": 2,
-    "nombre": "Nuestra Senora De Las Mercedes N°37",
+    "nombre": "Nuestra Senora de las Mercedes N°37",
     "lat": -13.709493,
     "lng": -76.203114,
     "bomberos_disponibles": 6,
@@ -91,7 +91,7 @@
   },
   {
     "idCompaniaBomberos": 10,
-    "nombre": "Ofelia Banchero de Datorre N°109",
+    "nombre": "Ofelia Banchero de Da Torre N°109",
     "lat": -14.052736,
     "lng": -75.745583,
     "bomberos_disponibles": 8,
@@ -111,7 +111,7 @@
   },
   {
     "idCompaniaBomberos": 12,
-    "nombre": "MARIA REICHE NEWMAN - VISTA ALEGRE N°197",
+    "nombre": "Vista Alegre N°197",
     "lat": -14.844253,
     "lng": -74.946477,
     "bomberos_disponibles": 2,
