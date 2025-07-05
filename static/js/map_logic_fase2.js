@@ -40,7 +40,17 @@ function distanceMeters(lat1, lng1, lat2, lng2) {
     return R * c;
 }
 
-function updateRecursosMarkers() {
+function getClosest(arr, n, center) {
+    return arr
+        .map(obj => ({
+            ...obj,
+            dist: distanceMeters(center.lat, center.lng, obj.lat, obj.lng)
+        }))
+        .sort((a, b) => a.dist - b.dist)
+        .slice(0, n);
+}
+
+function updateRecursosMarkers(center, radius) {
     hidrantesMarkers.forEach(m => map.removeLayer(m));
     hidrantesMarkers = [];
     fabricasMarkers.forEach(m => map.removeLayer(m));
@@ -48,23 +58,21 @@ function updateRecursosMarkers() {
     estacionesMarkers.forEach(m => map.removeLayer(m));
     estacionesMarkers = [];
 
-    const center = incidenteMarker.getLatLng();
-    const radius = +document.getElementById('radiusInput').value;
-
+    // Hidrantes
     hidrantesData.filter(h => distanceMeters(center.lat, center.lng, h.lat, h.lng) <= radius)
         .forEach(h => {
             let marker = L.marker([h.lat, h.lng], { icon: hidranteIcon }).addTo(map)
                 .bindPopup(`<b>Hidrante</b><br>${h.nombre ?? ''}`);
             hidrantesMarkers.push(marker);
         });
-
+    // Fábricas
     fabricasData.filter(f => distanceMeters(center.lat, center.lng, f.lat, f.lng) <= radius)
         .forEach(f => {
             let marker = L.marker([f.lat, f.lng], { icon: fabricaIcon }).addTo(map)
                 .bindPopup(`<b>Fábrica</b><br>${f.nombre ?? ''}`);
             fabricasMarkers.push(marker);
         });
-
+    // Estaciones de servicio
     estacionesData.filter(e => distanceMeters(center.lat, center.lng, e.lat, e.lng) <= radius)
         .forEach(e => {
             let marker = L.marker([e.lat, e.lng], { icon: estacionIcon }).addTo(map)
@@ -74,12 +82,13 @@ function updateRecursosMarkers() {
 }
 
 function updateCircleAndAll() {
+    const center = incidenteMarker.getLatLng();
+    const radius = +document.getElementById('radiusInput').value;
     if (circle) {
-        const center = incidenteMarker.getLatLng();
-        const radius = +document.getElementById('radiusInput').value;
         circle.setLatLng(center).setRadius(radius);
     }
-    updateRecursosMarkers();
+    updateRecursosMarkers(center, radius);
+    document.getElementById('radiusValue').textContent = radius + ' m';
 }
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -108,7 +117,69 @@ document.addEventListener("DOMContentLoaded", function () {
             .addTo(map).bindPopup("Lugar del Incendio").openPopup();
 
         updateCircleAndAll();
+
+        // Si hay sección de resumen/preview de recursos, puedes mostrar aquí los más cercanos también.
     });
 
     document.getElementById('radiusInput').addEventListener('input', updateCircleAndAll);
+
+    // GUARDAR REPORTE
+    const btnGuardar = document.getElementById('btnGuardarReporte');
+    if (btnGuardar) {
+        btnGuardar.addEventListener('click', function () {
+            // Obtener datos de la interfaz o localStorage
+            const lat = +document.getElementById('incidenteLat').value;
+            const lng = +document.getElementById('incidenteLng').value;
+            const radius = +document.getElementById('radiusInput').value;
+
+            // Sección para obtener info adicional:
+            const tipo_incidente = localStorage.getItem('tipo_incidente') || 'Sin especificar';
+            const departamento = localStorage.getItem('departamento') || '';
+            const provincia = localStorage.getItem('provincia') || '';
+            const distrito = localStorage.getItem('distrito') || '';
+
+            // Si guardaste el array de ids de compañías seleccionadas:
+            const ids_companias = JSON.parse(localStorage.getItem('companias_seleccionadas') || '[]');
+
+            // Pide los datos completos de compañías (puedes mejorar esto)
+            fetch('/api/companias').then(r => r.json()).then(companiasDB => {
+                const companias = companiasDB.filter(c => ids_companias.includes(c.id));
+
+                // Filtra los recursos más cercanos (6 de cada uno)
+                const incidentePoint = { lat, lng };
+                const hidrantesCercanos = getClosest(hidrantesData, 6, incidentePoint);
+                const fabricasCercanas = getClosest(fabricasData, 6, incidentePoint);
+                const estacionesCercanas = getClosest(estacionesData, 6, incidentePoint);
+
+                // Construir el reporte:
+                const reporte = {
+                    tipo_incidente,
+                    departamento,
+                    provincia,
+                    distrito,
+                    latitud: lat,
+                    longitud: lng,
+                    companias,
+                    hidrantes: hidrantesCercanos,
+                    fabricas: fabricasCercanas,
+                    estaciones: estacionesCercanas
+                };
+
+                // Enviar al backend para guardar
+                fetch('/fase2', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(reporte)
+                }).then(resp => resp.json())
+                .then(resp => {
+                    if (resp.ok) {
+                        alert('¡Reporte guardado correctamente!');
+                        window.location.href = '/dashboard/bombero';
+                    } else {
+                        alert('Error al guardar el reporte.');
+                    }
+                });
+            });
+        });
+    }
 });

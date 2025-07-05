@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% block title %}Tus Reportes Guardados{% endblock %}
+
+{% block content %}
+<style>
+.dashboard-main {
+  max-width: 1120px;
+  margin: 30px auto 0 auto;
+  padding: 24px;
+  background: #fff;
+  border-radius: 22px;
+  box-shadow: 0 4px 32px #e539351a;
+  min-height: 80vh;
+}
+
+.dashboard-title {
+  color: #e53935;
+  font-size: 2.1em;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  margin-bottom: 28px;
+  text-shadow: 0 2px 12px #e5393511;
+}
+
+.reports-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 30px;
+}
+
+.report-card {
+  background: #fff7f6;
+  border-radius: 15px;
+  box-shadow: 0 2px 11px #e5393512;
+  padding: 18px 20px 14px 20px;
+  cursor: pointer;
+  border-left: 7px solid #e53935;
+  transition: box-shadow .15s, border-color .2s;
+  position: relative;
+}
+.report-card:hover {
+  box-shadow: 0 4px 18px #e5393530;
+  border-left: 7px solid #b71c1c;
+}
+
+.report-title {
+  font-size: 1.22em;
+  color: #b71c1c;
+  font-weight: 700;
+  margin-bottom: 4px;
+  letter-spacing: 0.01em;
+}
+
+.report-info {
+  font-size: 0.97em;
+  color: #313131;
+  margin-bottom: 2px;
+}
+.report-label {
+  font-weight: 600;
+  color: #c62828;
+}
+.report-date {
+  color: #555;
+  font-size: 0.93em;
+  margin-top: 2px;
+}
+
+.empty-state {
+  color: #c62828;
+  font-size: 1.15em;
+  margin: 48px auto;
+  text-align: center;
+  font-weight: 700;
+}
+
+.report-modal-bg {
+  display: none;
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background: #2226a8cc; z-index: 90;
+  justify-content: center; align-items: center;
+}
+.report-modal-bg.active { display: flex; }
+.report-modal {
+  background: #fff;
+  border-radius: 19px;
+  box-shadow: 0 6px 36px #111a;
+  padding: 36px 32px 24px 32px;
+  max-width: 670px;
+  width: 98vw;
+  max-height: 89vh;
+  overflow-y: auto;
+  position: relative;
+  animation: popin .15s;
+}
+@keyframes popin { from{ transform:scale(.85); opacity:.4 } to{transform:scale(1);opacity:1} }
+.modal-close-btn {
+  position: absolute; top: 12px; right: 18px;
+  font-size: 1.6em;
+  background: none;
+  border: none;
+  color: #e53935;
+  cursor: pointer;
+  font-weight: bold;
+  opacity: .78;
+  transition: opacity .13s;
+}
+.modal-close-btn:hover { opacity: 1; }
+
+.modal-section-title {
+  color: #e53935; font-weight: 700; font-size: 1.14em; margin: 18px 0 6px 0;
+  display: flex; align-items: center; gap: 8px;
+}
+.modal-section-list {
+  margin: 0 0 8px 0;
+  padding-left: 18px;
+  font-size: 0.98em;
+}
+.modal-section-list li { margin-bottom: 2px; }
+.modal-section-empty { color: #999; font-style: italic; margin-left: 5px; }
+.modal-header-row {
+  display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;
+}
+.modal-header-label { font-size:1.02em; color: #c62828; font-weight: bold; }
+.modal-coords { color: #2e2e2e; font-size: 1.04em; font-weight: 500; }
+</style>
+
+<div class="dashboard-main">
+  <div class="dashboard-title">
+    Tus Reportes Guardados
+  </div>
+  {% if not reportes or reportes|length == 0 %}
+    <div class="empty-state">
+      No tienes reportes guardados aún.
+    </div>
+  {% else %}
+    <div class="reports-list">
+      {% for rep in reportes %}
+        <div class="report-card"
+             onclick="showModal({{ loop.index0 }})"
+             tabindex="0"
+             title="Haz clic para ver el reporte completo">
+          <div class="report-title">
+            {{ rep.tipo_incidente|default("Incidente")|capitalize }}
+          </div>
+          <div class="report-info">
+            <span class="report-label">Departamento:</span> {{ rep.departamento|default('-') }},
+            <span class="report-label">Provincia:</span> {{ rep.provincia|default('-') }},
+            <span class="report-label">Distrito:</span> {{ rep.distrito|default('-') }}
+          </div>
+          <div class="report-info">
+            <span class="report-label">Coordenadas:</span>
+            {{ rep.latitud }}, {{ rep.longitud }}
+          </div>
+          <div class="report-date">
+            Fecha: {{ rep.fecha.strftime('%Y-%m-%d %H:%M:%S') if rep.fecha else '-' }}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+
+<!-- Modal para ver reporte detallado -->
+<div class="report-modal-bg" id="modalBg">
+  <div class="report-modal" id="modalContent">
+    <button class="modal-close-btn" onclick="closeModal()" title="Cerrar">×</button>
+    <!-- Aquí se insertará el reporte detallado -->
+  </div>
+</div>
+
+<script>
+// Carga todos los reportes en JS (así no necesitas recargar la página)
+const reportesData = {{ reportes|tojson }};
+
+// Renderiza un reporte detallado en la ventana modal
+function renderModalReporte(rep) {
+  function renderList(arr, label) {
+    if (!arr || arr.length === 0)
+      return `<span class="modal-section-empty">No registradas</span>`;
+    // Si es compañías
+    if(label === "Compañías"){
+      return `<ul class="modal-section-list">` + arr.map(c =>
+        `<li><b>${c.nombre || '-'}</b> | Bomberos: ${c.bomberos_disponibles || '-'}, Vehículos: ${c.vehiculos_disponibles || '-'}, Responsable: ${c.nombre_responsable || '-'}, Cargo: ${c.cargo_responsable || '-'}</li>`
+      ).join('') + `</ul>`;
+    }
+    // Si es hidrantes
+    if(label === "Hidrantes"){
+      return `<ul class="modal-section-list">` + arr.map(h =>
+        `<li>${h.nombre || '-'}${h.estado ? ' | Estado: '+h.estado : ''}${h.dist ? ' | Dist: '+Math.round(h.dist)+' m' : ''}</li>`
+      ).join('') + `</ul>`;
+    }
+    // Si es fábricas
+    if(label === "Fábricas"){
+      return `<ul class="modal-section-list">` + arr.map(f =>
+        `<li>${f.nombre || '-'}${f.actividad ? ' | Actividad: '+f.actividad : ''}${f.dist ? ' | Dist: '+Math.round(f.dist)+' m' : ''}</li>`
+      ).join('') + `</ul>`;
+    }
+    // Si es estaciones
+    if(label === "Estaciones de Servicio"){
+      return `<ul class="modal-section-list">` + arr.map(e =>
+        `<li>${e.nombre || '-'}${e.actividad ? ' | Actividad: '+e.actividad : ''}${e.dist ? ' | Dist: '+Math.round(e.dist)+' m' : ''}</li>`
+      ).join('') + `</ul>`;
+    }
+    return '';
+  }
+
+  return `
+  <div class="modal-header-row">
+    <div class="report-title" style="font-size:1.5em;">
+      ${rep.tipo_incidente || "Incidente"}
+    </div>
+    <div class="modal-header-label">Fecha:</div>
+    <div>${rep.fecha ? rep.fecha.replace('T',' ').slice(0,19) : '-'}</div>
+  </div>
+  <div>
+    <span class="modal-header-label">Departamento:</span> ${rep.departamento || '-'},
+    <span class="modal-header-label">Provincia:</span> ${rep.provincia || '-'},
+    <span class="modal-header-label">Distrito:</span> ${rep.distrito || '-'}
+  </div>
+  <div style="margin: 7px 0 15px 0;">
+    <span class="modal-header-label">Coordenadas:</span>
+    <span class="modal-coords">${rep.latitud}, ${rep.longitud}</span>
+  </div>
+  <div class="modal-section-title"><img src="/static/img/Bombero.png" style="width:20px;"> Compañías</div>
+  ${renderList(rep.companias, "Compañías")}
+  <div class="modal-section-title"><img src="/static/img/hidrante.png" style="width:20px;"> Hidrantes</div>
+  ${renderList(rep.hidrantes, "Hidrantes")}
+  <div class="modal-section-title"><img src="/static/img/fabrica.png" style="width:20px;"> Fábricas</div>
+  ${renderList(rep.fabricas, "Fábricas")}
+  <div class="modal-section-title"><img src="/static/img/gas.png" style="width:20px;"> Estaciones de Servicio</div>
+  ${renderList(rep.estaciones, "Estaciones de Servicio")}
+  `;
+}
+
+// Función para mostrar el modal de un reporte
+window.showModal = function(idx) {
+  const rep = reportesData[idx];
+  if (!rep) return;
+  document.getElementById('modalContent').innerHTML = `
+    <button class="modal-close-btn" onclick="closeModal()" title="Cerrar">×</button>
+    ${renderModalReporte(rep)}
+  `;
+  document.getElementById('modalBg').classList.add('active');
+}
+window.closeModal = function() {
+  document.getElementById('modalBg').classList.remove('active');
+}
+// Cierra el modal al hacer click fuera del modal
+document.getElementById('modalBg').onclick = function(e) {
+  if (e.target === this) closeModal();
+};
+// Accesibilidad: cierra con Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === "Escape") closeModal();
+});
+</script>
+{% endblock %}

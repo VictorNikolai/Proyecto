@@ -6,17 +6,18 @@
 <style>
   body, .f2-main { background: #f9fafc; }
   .f2-main {
-    max-width: 1150px;
-    margin: 38px auto 24px auto;
-    padding: 25px 16px 50px 16px;
+    max-width: 1180px;
+    margin: 34px auto 24px auto;
+    padding: 25px 16px 55px 16px;
     background: #fff;
     border-radius: 18px;
     box-shadow: 0 4px 32px #e539351c;
-    display: flex; flex-direction: column; gap: 28px;
+    display: flex; flex-direction: column; gap: 32px;
   }
   .f2-header { 
     display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
     flex-wrap: wrap;
+    border-bottom: 2px solid #ffeaea; margin-bottom: 5px; padding-bottom: 6px;
   }
   .f2-title {
     color: #e53935; font-weight: bold; font-size: 1.72em; letter-spacing: 0.02em;
@@ -58,30 +59,54 @@
     background: #ffeaea; border-radius: 8px; padding: 7px 15px; margin: 5px 0 0 0;
     color: #b71c1c; font-size: 1.08em; display: inline-block; font-weight: 500;
   }
-  .f2-mapa { width: 100%; height: 320px; border-radius: 14px; margin: 19px 0 0 0; box-shadow: 0 2px 11px #e5393510;}
+  .f2-mapa {
+    width: 100%; height: 380px; border-radius: 14px; margin: 19px 0 0 0;
+    box-shadow: 0 2px 11px #e5393510; border: 2px solid #ffeaea;
+    position: relative;
+  }
   .f2-small { font-size: 0.98em; color: #888; margin-left: 10px; }
+  .f2-legenda {
+    position: absolute; right: 18px; top: 18px; z-index: 30;
+    background: #fff9; border-radius: 8px; box-shadow: 0 1px 4px #e5393520;
+    padding: 9px 17px 7px 17px; font-size: 1.03em; color: #444;
+    display: flex; gap: 20px; align-items: center;
+  }
+  .f2-legenda span { display: flex; align-items: center; gap: 5px;}
   @media (max-width: 800px) {
     .f2-cols { flex-direction: column; gap: 10px; }
     .f2-col { max-width: 100%; min-width: 100%; }
     .f2-header { flex-direction: column; gap: 12px;}
+    .f2-mapa { height: 230px;}
   }
 </style>
 
 <div class="f2-main">
   <div class="f2-header">
     <span class="f2-title">Fase 2: Recursos Cercanos y Resumen del Incidente</span>
-    <button id="btnSaveReporte" class="f2-btn-save">Guardar Reporte</button>
+    <button id="btnGuardarReporte" class="f2-btn-save">Guardar Reporte</button>
   </div>
 
   <div class="f2-section">
     <div class="f2-section-title">
-      <img src="/static/img/Incendio.png" style="width:28px;"> Ubicación del Incidente
+      <img src="/static/img/Incendio.png" style="width:28px;"> Ubicación del Incendio, Radio y Recursos Visualizados
     </div>
     <div id="f2-ubicacion">
       <span><b>Coordenadas:</b> <span id="f2-coords">-</span></span>
       <span class="f2-location" id="f2-dir">Buscando dirección...</span>
+      <span class="f2-location" id="f2-radio-marcado" style="background:#fff6ee;color:#d75407;">
+        Radio: <span id="radio-valor">-</span> m
+      </span>
     </div>
-    <div id="f2-mapa" class="f2-mapa"></div>
+    <div style="position:relative;">
+      <div id="f2-mapa" class="f2-mapa"></div>
+      <div class="f2-legenda">
+        <span><img src="/static/img/Incendio.png" style="width:22px;"> Incendio</span>
+        <span><img src="/static/img/Bombero.png" style="width:22px;"> Bomberos</span>
+        <span><img src="/static/img/hidrante.png" style="width:22px;"> Hidrante</span>
+        <span><img src="/static/img/fabrica.png" style="width:22px;"> Fábrica</span>
+        <span><img src="/static/img/gas.png" style="width:22px;"> Estación</span>
+      </div>
+    </div>
   </div>
 
   <div class="f2-section">
@@ -122,7 +147,6 @@
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-// --- Utilidades ---
 function distanceMeters(lat1, lng1, lat2, lng2) {
   function toRad(x) { return x * Math.PI / 180; }
   let R = 6371000;
@@ -134,7 +158,6 @@ function distanceMeters(lat1, lng1, lat2, lng2) {
   let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
-
 function getClosest(arr, n, lat, lng, keyLat='lat', keyLng='lng', skipIds=[]) {
   return arr
     .filter(obj => obj[keyLat] && obj[keyLng] && !skipIds.includes(obj.id))
@@ -142,7 +165,6 @@ function getClosest(arr, n, lat, lng, keyLat='lat', keyLng='lng', skipIds=[]) {
     .sort((a, b) => a.dist - b.dist)
     .slice(0, n);
 }
-
 function showCard(data, type='cia') {
   if (type === 'cia') {
     return `<div class="f2-col"><div class="f2-card">
@@ -181,15 +203,17 @@ function showCard(data, type='cia') {
   return '';
 }
 
-// --- Principal ---
 document.addEventListener('DOMContentLoaded', async function() {
-  // 1. Recuperar datos
+  // Recupera campos de incidente y contexto guardados en localStorage por Fase 1
   const companiasIds = JSON.parse(localStorage.getItem("companias_seleccionadas") || "[]");
   const incidenteLat = parseFloat(localStorage.getItem("incidente_lat") || "-12.04");
   const incidenteLng = parseFloat(localStorage.getItem("incidente_lng") || "-77.03");
-  const radio = parseInt(localStorage.getItem("radio_seleccionado") || "10000");
+  const radio = parseInt(localStorage.getItem("radio_seleccionado") || localStorage.getItem("radio") || "10000");
+  const tipo_incidente = localStorage.getItem("tipo_incendio") || "Incendio urbano";
 
-  // 2. Cargar JSON
+  document.getElementById("radio-valor").textContent = radio + "";
+
+  // Cargar recursos (en tu JSON local)
   const [bomberos, hidrantes, fabricas, gasolineras] = await Promise.all([
     fetch('/static/json/bomberos.json').then(r=>r.json()).catch(()=>[]),
     fetch('/static/json/hidrantes.json').then(r=>r.json()).catch(()=>[]),
@@ -197,32 +221,70 @@ document.addEventListener('DOMContentLoaded', async function() {
     fetch('/static/json/servicio.json').then(r=>r.json()).catch(()=>[])
   ]);
 
-  // 3. Mostrar ubicación y dirección
+  // Mostrar ubicación y dirección
   document.getElementById('f2-coords').textContent = `${incidenteLat.toFixed(6)}, ${incidenteLng.toFixed(6)}`;
   fetch(`https://nominatim.openstreetmap.org/reverse?lat=${incidenteLat}&lon=${incidenteLng}&format=json`)
     .then(r => r.json())
     .then(data => {
       const addr = data.address;
-      const distrito = addr.suburb || addr.city_district || addr.town || addr.village || '';
-      const provincia = addr.county || addr.state_district || '';
+      const distritoAddr = addr.suburb || addr.city_district || addr.town || addr.village || '';
+      const provinciaAddr = addr.county || addr.state_district || '';
       const depa = addr.state || '';
-      document.getElementById('f2-dir').textContent = `${distrito}, ${provincia}, ${depa}`.replace(/^,|,,/g,'').replace(/ ,/g,',');
+      document.getElementById('f2-dir').textContent = `${distritoAddr}, ${provinciaAddr}, ${depa}`.replace(/^,|,,/g,'').replace(/ ,/g,',');
+
+      // Guarda estos datos en localStorage para el guardado final
+      localStorage.setItem('departamento', depa);
+      localStorage.setItem('provincia', provinciaAddr);
+      localStorage.setItem('distrito', distritoAddr);
     }).catch(()=>{ document.getElementById('f2-dir').textContent = "No disponible"; });
 
-  // Mapa del incidente
+  // --- Mapa ---
   let map = L.map('f2-mapa').setView([incidenteLat, incidenteLng], 14);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: 'Map data © OpenStreetMap contributors'
   }).addTo(map);
-  L.marker([incidenteLat, incidenteLng], {icon: L.icon({iconUrl:'/static/img/Incendio.png',iconSize:[44,48],iconAnchor:[22,47]})})
-    .addTo(map).bindPopup('Incidente').openPopup();
 
-  // 4. Mostrar compañías seleccionadas
+  // Iconos personalizados
+  const iconIncendio = L.icon({ iconUrl:'/static/img/Incendio.png', iconSize:[42,48], iconAnchor:[21,47] });
+  const iconBombero = L.icon({ iconUrl:'/static/img/Bombero.png', iconSize:[32,36], iconAnchor:[16,35] });
+  const iconHidrante = L.icon({ iconUrl:'/static/img/hidrante.png', iconSize:[28,32], iconAnchor:[13,31] });
+  const iconFabrica = L.icon({ iconUrl:'/static/img/fabrica.png', iconSize:[32,34], iconAnchor:[15,33] });
+  const iconEstacion = L.icon({ iconUrl:'/static/img/gas.png', iconSize:[28,32], iconAnchor:[13,31] });
+
+  let circle = L.circle([incidenteLat, incidenteLng], {
+    color: "#e53935", fillColor: "#ffdad4", fillOpacity: 0.13, radius: radio, weight: 2
+  }).addTo(map);
+
+  L.marker([incidenteLat, incidenteLng], {icon: iconIncendio}).addTo(map)
+    .bindPopup('<b>Incidente</b>').openPopup();
+
+  companiasIds.forEach(idx => {
+    const c = bomberos[idx];
+    if (c?.lat && c?.lng)
+      L.marker([c.lat, c.lng], {icon: iconBombero}).addTo(map)
+        .bindPopup(`<b>${c.nombre}</b><br>Bomberos: ${c.bomberos_disponibles}<br>Vehículos: ${c.vehiculos_disponibles}`);
+  });
+  getClosest(hidrantes, 6, incidenteLat, incidenteLng).forEach(h => {
+    L.marker([h.lat, h.lng], {icon: iconHidrante})
+      .addTo(map)
+      .bindPopup(`<b>Hidrante</b><br>${h.nombre ?? '-'}<br>${h.estado ? 'Estado: '+h.estado : ''}<br>${Math.round(h.dist)}m`);
+  });
+  getClosest(fabricas, 6, incidenteLat, incidenteLng).forEach(f => {
+    L.marker([f.lat, f.lng], {icon: iconFabrica})
+      .addTo(map)
+      .bindPopup(`<b>Fábrica</b><br>${f.nombre ?? '-'}<br>${f.actividad ?? ''}<br>${Math.round(f.dist)}m`);
+  });
+  getClosest(gasolineras, 6, incidenteLat, incidenteLng).forEach(e => {
+    L.marker([e.lat, e.lng], {icon: iconEstacion})
+      .addTo(map)
+      .bindPopup(`<b>Estación</b><br>${e.nombre ?? '-'}<br>${e.actividad ?? ''}<br>${Math.round(e.dist)}m`);
+  });
+
+  // Mostrar tarjetas de recursos seleccionados
   document.getElementById('f2-companias').innerHTML = companiasIds.length
     ? companiasIds.map(idx => showCard(bomberos[idx], 'cia')).join('')
     : '<span style="color:#c62828;font-weight:bold;">No se seleccionó ninguna compañía.</span>';
 
-  // 5. Mostrar recursos cercanos (6 más cercanos)
   const hidrantesCercanos = getClosest(hidrantes, 6, incidenteLat, incidenteLng);
   document.getElementById('f2-hidrantes').innerHTML = hidrantesCercanos.map(h => showCard(h, 'hidrante')).join('');
 
@@ -232,7 +294,6 @@ document.addEventListener('DOMContentLoaded', async function() {
   const estacionesCercanas = getClosest(gasolineras, 6, incidenteLat, incidenteLng);
   document.getElementById('f2-estaciones').innerHTML = estacionesCercanas.map(e => showCard(e, 'estacion')).join('');
 
-  // 6. Hidrantes adicionales (los siguientes 4 más lejanos dentro del radio)
   let usados = hidrantesCercanos.map(h=>h.id);
   const hidrantesAdicionales = hidrantes
     .filter(h => h.lat && h.lng && distanceMeters(incidenteLat, incidenteLng, h.lat, h.lng) <= radio && !usados.includes(h.id))
@@ -243,24 +304,38 @@ document.addEventListener('DOMContentLoaded', async function() {
     ? hidrantesAdicionales.map(h => showCard(h, 'hidrante')).join('')
     : '<span class="f2-small">No hay más hidrantes posibles dentro del radio.</span>';
 
-  // 7. Guardar reporte en localStorage
-  document.getElementById('btnSaveReporte').onclick = function() {
-    const reporte = {
-      timestamp: Date.now(),
-      incidente: {lat: incidenteLat, lng: incidenteLng},
-      radio,
-      direccion: document.getElementById('f2-dir').textContent,
-      companias: companiasIds.map(idx => bomberos[idx]),
-      hidrantes: hidrantesCercanos,
-      hidrantesExtra: hidrantesAdicionales,
-      fabricas: fabricasCercanas,
-      estaciones: estacionesCercanas
-    };
-    let reportes = JSON.parse(localStorage.getItem("reportes_guardados") || "[]");
-    reportes.push(reporte);
-    localStorage.setItem("reportes_guardados", JSON.stringify(reportes));
-    alert("Reporte guardado correctamente.");
+  // GUARDAR REPORTE en backend
+  document.getElementById('btnGuardarReporte').onclick = function() {
+    // ¡Usa directamente los índices locales de los bomberos!
+    const companiasSeleccionadas = companiasIds.map(idx => bomberos[idx]);
+    fetch('/guardar_reporte', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        tipo_incidente,
+        departamento: localStorage.getItem('departamento') || "",
+        provincia: localStorage.getItem('provincia') || "",
+        distrito: localStorage.getItem('distrito') || "",
+        latitud: incidenteLat,
+        longitud: incidenteLng,
+        companias: companiasSeleccionadas,
+        hidrantes: hidrantesCercanos,
+        fabricas: fabricasCercanas,
+        estaciones: estacionesCercanas
+      })
+    })
+    .then(resp => resp.json())
+    .then(data => {
+      if (data.ok) {
+        alert("Reporte guardado exitosamente.");
+        window.location.href = '/dashboard/bombero';
+      } else {
+        alert("Hubo un error al guardar el reporte.");
+      }
+    })
+    .catch(()=>alert("Error de red al guardar el reporte"));
   };
 });
 </script>
 {% endblock %}
+
